@@ -1,3 +1,6 @@
 [submodule "dyninst"]
 	path = dyninst
 	url = git@github.com:dyninst/dyninst.git
+[submodule "testsuite"]
+	path = testsuite
+	url = git@github.com:dyninst/testsuite.git
