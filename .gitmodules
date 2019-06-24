@@ -1,0 +1,3 @@
+[submodule "dyninst"]
+	path = dyninst
+	url = git@github.com:dyninst/dyninst.git
