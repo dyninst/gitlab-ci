@@ -1,8 +1,8 @@
 [submodule "dyninst"]
 	path = dyninst
-	url = git@github.com:dyninst/dyninst.git
+	url = https://github.com/dyninst/dyninst.git
 	branch = master
 [submodule "testsuite"]
 	path = testsuite
-	url = git@github.com:dyninst/testsuite.git
+	url = https://github.com/dyninst/testsuite.git
 	branch = master
