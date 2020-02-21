@@ -1,0 +1,103 @@
+# The dyninst/gitlab-ci repo consists of two submodules.
+#    dyninst
+#    testsuite
+# Currently the build and running of tests are all managed by
+# a perl script (build.pl) found in the testsuite.  So we are
+# only running one stage that builds and runs the tests.
+# at the end of the run a tarball is created with results.
+# That tarball is the lone artifact of this yml file.
+#
+stages:
+  - build
+
+# since the dyninst/gitlab-ci repo uses submodules we need to
+# inform gitlab that it must use the recursive strategy to
+# pull in the contents of the submodules in the pipeline.
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+
+# setup the runner to use the nmc tag.  Other runners can
+# be added.  Note that we use extends to allow running on
+# two systems at NMC via the OSTI gitlab.
+.dyninst-test-runner:
+  tags: [nmc-xxfe1-sched-001]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web" || $CI_PIPELINE_SOURCE == "schedules"'
+      when: on_success
+  interruptible: true
+
+# extend the runner for the NMC ecp-x86_64 platform.
+# TODO: rename this to .nmc-x86_64-platform since other
+# non NMC systems could share this yml file.
+.nmc-x86_64-platform:
+  extends: .dyninst-test-runner
+  variables:
+    NMC_FE1_SLURM_PARAMETERS: "-n 8 -p ecp-x86_64 -t 02:00:00 --exclusive"
+
+# extend the runner for the NMC ecp-ppc64le platform.
+# TODO: rename this to .nmc-ppc64le-platform since other
+# non NMC systems could share this yml file.
+.nmc-ppc64le-platform:
+  extends: .dyninst-test-runner
+  variables:
+    NMC_FE1_SLURM_PARAMETERS: "-n 20 -p ecp-p9-4v100 -t 02:00:00 --exclusive"
+
+# specific to the modules (lmod based) at NMC.
+# Take advantage of the Pkg_ROOT_DIR conventions.
+# Other sites maybe be differenc and a separate modules
+# section can be created as needed. This is added to
+# the build:xxxx extends section for each platform
+.nmc-modules:
+  before_script:
+    - module load gcc/7.4.0
+    - module load cmake
+    - module load boost
+    - module load elfutils
+    - module load libiberty
+    - module load intel-tbb
+    - module load libxml2
+    - echo "Boost_ROOT_DIR=" $NMC_BOOST_ROOT
+    - echo "ElfUtils_ROOT_DIR=" $NMC_ELFUTILS_ROOT
+    - echo "LibIberty_ROOT_DIR=" $NMC_LIBIBERTY_ROOT
+    - echo "TBB_ROOT_DIR=" $NMC_INTEL_TBB_ROOT
+    - echo "LibXml2_ROOT_DIR=" $NMC_LIBXML2_ROOT
+    - dyn_args='-DBoost_ROOT_DIR=$NMC_BOOST_ROOT -DElfUtils_ROOT_DIR=$NMC_ELFUTILS_ROOT -DLibIberty_ROOT_DIR=$NMC_LIBIBERTY_ROOT -DTBB_ROOT_DIR=$NMC_INTEL_TBB_ROOT'
+    - ts_args='-DLibXml2_ROOT_DIR=$NMC_LIBXML2_ROOT'
+
+# modules may be different per platform. If that is the case the we
+# need to move them elsewhere.
+# NOTE that dyninst and testsuite are built and tested in one stage
+# via a perl script at this time. On the NMC power9 using njobs=8
+# seems to hang the build.
+# TODO: Should the value for njobs be platform specific?
+#       ie. --njobs=${NJOBS}
+#
+.build-script:
+  stage: build
+  script:
+    - date
+    - echo "PWD"
+    - pwd
+    - PROJECT_HOME=$(pwd)
+    - export PERL5LIB=${PROJECT_HOME}/testsuite/scripts/build
+    - perl ${PROJECT_HOME}/testsuite/scripts/build/build.pl  --dyninst-cmake-args="${dyn_args}" --testsuite-cmake-args="${ts_args}" --njobs=4
+    - date
+#  artifacts:
+#    name: "$CI_JOB_NAME-$CI_COMMIT_REF_NAME"
+#    paths:
+#      - "${PROJECT_HOME}/*.tar.gz"
+
+# these are secific to NMC.  So we should likely rename them
+# to include the nmc name.  Other sites/systems would add similar
+# sections as needed.
+build:nmc_x86_64:
+  extends:
+    - .nmc-x86_64-platform
+    - .nmc-modules
+    - .build-script
+
+build:nmc_ppc64le:
+  extends:
+    - .nmc-ppc64le-platform
+    - .nmc-modules
+    - .build-script
